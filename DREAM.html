@@ -1,0 +1,816 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Oneira — Dream Analyzer</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300;1,400&family=DM+Sans:wght@300;400;500&display=swap');
+
+  :root {
+    --ink:       #0d0d14;
+    --deep:      #111120;
+    --void:      #16162a;
+    --surface:   #1e1e35;
+    --rim:       #2a2a4a;
+    --mist:      #4a4a7a;
+    --silver:    #9898b8;
+    --ghost:     #c8c8e0;
+    --light:     #eeeef8;
+    --aurora:    #7c6af7;
+    --aurora2:   #a78bfa;
+    --glow:      #c4b5fd;
+    --rose:      #f472b6;
+    --teal:      #5eead4;
+    --amber:     #fbbf24;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--ink);
+    color: var(--ghost);
+    font-family: 'DM Sans', sans-serif;
+    font-weight: 300;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Stars canvas */
+  #starfield {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .app {
+    position: relative;
+    z-index: 1;
+    max-width: 780px;
+    margin: 0 auto;
+    padding: 48px 24px 80px;
+  }
+
+  /* Header */
+  header {
+    text-align: center;
+    margin-bottom: 56px;
+  }
+
+  .wordmark {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: clamp(2.8rem, 8vw, 4.4rem);
+    font-weight: 300;
+    font-style: italic;
+    letter-spacing: 0.04em;
+    background: linear-gradient(135deg, var(--glow) 0%, var(--aurora2) 50%, var(--rose) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    line-height: 1;
+  }
+
+  .tagline {
+    margin-top: 10px;
+    font-size: 0.78rem;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--mist);
+  }
+
+  /* Moon phase indicator */
+  .moon {
+    font-size: 1.6rem;
+    display: block;
+    margin-bottom: 12px;
+    filter: drop-shadow(0 0 12px rgba(196,181,253,0.6));
+  }
+
+  /* Input card */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--rim);
+    border-radius: 20px;
+    padding: 32px;
+    margin-bottom: 28px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--aurora), transparent);
+  }
+
+  .card-label {
+    font-size: 0.7rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--aurora2);
+    margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .card-label::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--rim);
+  }
+
+  textarea {
+    width: 100%;
+    background: var(--void);
+    border: 1px solid var(--rim);
+    border-radius: 12px;
+    color: var(--light);
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 1.15rem;
+    font-weight: 300;
+    font-style: italic;
+    line-height: 1.75;
+    padding: 18px 20px;
+    resize: none;
+    outline: none;
+    transition: border-color 0.25s;
+    min-height: 160px;
+  }
+
+  textarea::placeholder {
+    color: var(--mist);
+    font-style: italic;
+  }
+
+  textarea:focus {
+    border-color: var(--aurora);
+  }
+
+  /* Char count */
+  .meta-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 12px;
+  }
+
+  .char-count {
+    font-size: 0.72rem;
+    color: var(--mist);
+  }
+
+  /* Analyze button */
+  .btn-analyze {
+    background: linear-gradient(135deg, var(--aurora) 0%, var(--rose) 100%);
+    border: none;
+    border-radius: 10px;
+    color: #fff;
+    cursor: pointer;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.82rem;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    padding: 10px 24px;
+    text-transform: uppercase;
+    transition: opacity 0.2s, transform 0.15s;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .btn-analyze:hover { opacity: 0.88; transform: translateY(-1px); }
+  .btn-analyze:active { transform: translateY(0); }
+  .btn-analyze:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+  /* Loading */
+  .loading {
+    display: none;
+    text-align: center;
+    padding: 40px;
+    color: var(--silver);
+    font-size: 0.85rem;
+    letter-spacing: 0.08em;
+  }
+
+  .loading.visible { display: block; }
+
+  .loading-orb {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--aurora), var(--rose));
+    margin: 0 auto 16px;
+    animation: pulse-orb 1.6s ease-in-out infinite;
+  }
+
+  @keyframes pulse-orb {
+    0%, 100% { transform: scale(0.85); opacity: 0.6; box-shadow: 0 0 0 0 rgba(124,106,247,0.4); }
+    50% { transform: scale(1.1); opacity: 1; box-shadow: 0 0 0 16px rgba(124,106,247,0); }
+  }
+
+  /* Results */
+  .results {
+    display: none;
+    animation: fade-up 0.5s ease;
+  }
+
+  .results.visible { display: block; }
+
+  @keyframes fade-up {
+    from { opacity: 0; transform: translateY(16px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* Emotion meter */
+  .emotion-card {
+    background: var(--surface);
+    border: 1px solid var(--rim);
+    border-radius: 20px;
+    padding: 28px 32px;
+    margin-bottom: 20px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .emotion-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--aurora), transparent);
+  }
+
+  .emotion-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 20px;
+  }
+
+  .section-eyebrow {
+    font-size: 0.7rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--aurora2);
+  }
+
+  .primary-emotion {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 2.2rem;
+    font-weight: 300;
+    font-style: italic;
+    color: var(--light);
+    line-height: 1;
+  }
+
+  .emotion-emoji {
+    font-size: 2.2rem;
+    filter: drop-shadow(0 0 8px rgba(196,181,253,0.5));
+  }
+
+  /* Emotion bars */
+  .emotion-bars { display: flex; flex-direction: column; gap: 10px; }
+
+  .bar-row {
+    display: grid;
+    grid-template-columns: 90px 1fr 36px;
+    align-items: center;
+    gap: 12px;
+    font-size: 0.78rem;
+  }
+
+  .bar-label { color: var(--silver); }
+  .bar-track {
+    height: 6px;
+    background: var(--void);
+    border-radius: 99px;
+    overflow: hidden;
+  }
+  .bar-fill {
+    height: 100%;
+    border-radius: 99px;
+    transition: width 0.8s cubic-bezier(0.23, 1, 0.32, 1);
+    width: 0%;
+  }
+  .bar-val { color: var(--silver); text-align: right; font-size: 0.72rem; }
+
+  /* Symbols grid */
+  .symbols-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 14px;
+    margin-bottom: 20px;
+  }
+
+  .symbol-chip {
+    background: var(--void);
+    border: 1px solid var(--rim);
+    border-radius: 14px;
+    padding: 16px 18px;
+    transition: border-color 0.2s;
+  }
+
+  .symbol-chip:hover { border-color: var(--aurora); }
+
+  .symbol-name {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 1.1rem;
+    font-style: italic;
+    color: var(--glow);
+    margin-bottom: 4px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .symbol-meaning {
+    font-size: 0.76rem;
+    color: var(--silver);
+    line-height: 1.5;
+  }
+
+  /* Interpretation block */
+  .interp-card {
+    background: var(--deep);
+    border: 1px solid var(--rim);
+    border-left: 3px solid var(--aurora);
+    border-radius: 0 14px 14px 0;
+    padding: 24px 28px;
+    margin-bottom: 20px;
+  }
+
+  .interp-text {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 1.15rem;
+    font-style: italic;
+    color: var(--ghost);
+    line-height: 1.9;
+  }
+
+  /* Actions */
+  .actions-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 14px;
+    margin-bottom: 28px;
+  }
+
+  .action-chip {
+    background: var(--surface);
+    border: 1px solid var(--rim);
+    border-radius: 14px;
+    padding: 18px;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .action-icon { font-size: 1.4rem; flex-shrink: 0; }
+  .action-title { font-size: 0.82rem; font-weight: 500; color: var(--light); margin-bottom: 3px; }
+  .action-desc { font-size: 0.74rem; color: var(--silver); line-height: 1.5; }
+
+  /* Disclaimer */
+  .disclaimer {
+    text-align: center;
+    font-size: 0.72rem;
+    color: var(--mist);
+    line-height: 1.6;
+    padding: 0 16px;
+  }
+
+  /* History */
+  .history-section { margin-top: 40px; }
+  .history-title {
+    font-size: 0.7rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--mist);
+    margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .history-title::after { content: ''; flex: 1; height: 1px; background: var(--rim); }
+
+  .history-list { display: flex; flex-direction: column; gap: 10px; }
+  .history-item {
+    background: var(--surface);
+    border: 1px solid var(--rim);
+    border-radius: 12px;
+    padding: 14px 18px;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 12px;
+    cursor: pointer;
+    transition: border-color 0.2s;
+  }
+  .history-item:hover { border-color: var(--aurora); }
+  .history-snippet {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 0.95rem;
+    font-style: italic;
+    color: var(--ghost);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .history-meta {
+    font-size: 0.7rem;
+    color: var(--mist);
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .history-badge {
+    background: var(--void);
+    border: 1px solid var(--rim);
+    border-radius: 99px;
+    padding: 2px 8px;
+    font-size: 0.65rem;
+    color: var(--aurora2);
+  }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: var(--ink); }
+  ::-webkit-scrollbar-thumb { background: var(--rim); border-radius: 99px; }
+
+  @media (max-width: 520px) {
+    .app { padding: 32px 16px 60px; }
+    .card { padding: 22px 18px; }
+    .symbols-grid, .actions-row { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<canvas id="starfield"></canvas>
+
+<div class="app">
+  <header>
+    <span class="moon">🌙</span>
+    <div class="wordmark">Oneira</div>
+    <div class="tagline">Dream Reflection & Emotional Insight</div>
+  </header>
+
+  <!-- Input -->
+  <div class="card">
+    <div class="card-label">Tonight's Dream</div>
+    <textarea id="dreamInput" placeholder="Describe your dream as vividly as you remember it — the people, places, feelings, even fragments…" rows="6" maxlength="2000"></textarea>
+    <div class="meta-row">
+      <span class="char-count" id="charCount">0 / 2000</span>
+      <button class="btn-analyze" id="analyzeBtn" onclick="analyzeDream()">Interpret dream</button>
+    </div>
+  </div>
+
+  <!-- Loading -->
+  <div class="loading" id="loading">
+    <div class="loading-orb"></div>
+    Entering the dream…
+  </div>
+
+  <!-- Results -->
+  <div class="results" id="results">
+
+    <!-- Emotions -->
+    <div class="emotion-card">
+      <div class="emotion-header">
+        <div>
+          <div class="section-eyebrow">Emotional tone</div>
+          <div class="primary-emotion" id="primaryEmotion">—</div>
+        </div>
+        <div class="emotion-emoji" id="emotionEmoji">✨</div>
+      </div>
+      <div class="emotion-bars" id="emotionBars"></div>
+    </div>
+
+    <!-- Symbols -->
+    <div class="card">
+      <div class="card-label">Detected symbols</div>
+      <div class="symbols-grid" id="symbolsGrid"></div>
+    </div>
+
+    <!-- Interpretation -->
+    <div class="card">
+      <div class="card-label">Reflection</div>
+      <div class="interp-card">
+        <div class="interp-text" id="interpretation">—</div>
+      </div>
+    </div>
+
+    <!-- Actions -->
+    <div class="card">
+      <div class="card-label">Suggested practices</div>
+      <div class="actions-row" id="actionsRow"></div>
+    </div>
+
+    <p class="disclaimer">Oneira is a reflective journaling tool, not a clinical diagnostic. Interpretations are drawn from common cultural and psychological associations — treat them as prompts for self-reflection, not facts.</p>
+  </div>
+
+  <!-- History -->
+  <div class="history-section" id="historySection" style="display:none">
+    <div class="history-title">Recent dreams</div>
+    <div class="history-list" id="historyList"></div>
+  </div>
+</div>
+
+<script>
+/* ── Starfield ── */
+const canvas = document.getElementById('starfield');
+const ctx = canvas.getContext('2d');
+let stars = [];
+
+function resizeCanvas() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+
+function initStars() {
+  stars = Array.from({length: 160}, () => ({
+    x: Math.random() * canvas.width,
+    y: Math.random() * canvas.height,
+    r: Math.random() * 1.2 + 0.2,
+    o: Math.random() * 0.6 + 0.1,
+    speed: Math.random() * 0.3 + 0.05
+  }));
+}
+
+function drawStars() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  stars.forEach(s => {
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(200, 200, 240, ${s.o})`;
+    ctx.fill();
+    s.o += (Math.random() - 0.5) * 0.02;
+    s.o = Math.max(0.05, Math.min(0.8, s.o));
+  });
+  requestAnimationFrame(drawStars);
+}
+
+resizeCanvas(); initStars(); drawStars();
+window.addEventListener('resize', () => { resizeCanvas(); initStars(); });
+
+/* ── Char counter ── */
+const input = document.getElementById('dreamInput');
+const counter = document.getElementById('charCount');
+input.addEventListener('input', () => {
+  counter.textContent = `${input.value.length} / 2000`;
+});
+
+/* ── Knowledge graph ── */
+const SYMBOLS = {
+  flying:    { emoji: '🕊️', meaning: 'A desire for freedom or escape from constraints. Often linked to ambition or feeling ungrounded.' },
+  falling:   { emoji: '🌊', meaning: 'Anxiety about losing control or fear of failure. May reflect a situation that feels unsteady.' },
+  water:     { emoji: '💧', meaning: 'Emotion and the unconscious. Still water = peace; turbulent = inner conflict.' },
+  fire:      { emoji: '🔥', meaning: 'Passion, anger, or transformation. Destructive or purifying depending on context.' },
+  chasing:   { emoji: '👁️', meaning: 'Avoidance of a problem or person. Something unresolved is demanding attention.' },
+  teeth:     { emoji: '🦷', meaning: 'Anxiety about appearance, communication, or loss of power.' },
+  house:     { emoji: '🏚️', meaning: 'The self. Rooms represent aspects of your psyche; exploring them means self-discovery.' },
+  school:    { emoji: '📚', meaning: 'Feeling judged or tested. Often resurfaces when you face a real-life challenge.' },
+  death:     { emoji: '🌑', meaning: 'Not literal — symbolises endings, change, and transformation. Something is concluding.' },
+  animal:    { emoji: '🐺', meaning: 'Instincts or traits you associate with that animal. Often represents a part of yourself.' },
+  running:   { emoji: '💨', meaning: 'Urgency, avoidance, or pursuit of a goal. Context matters here.' },
+  stranger:  { emoji: '🪞', meaning: 'Unknown aspects of the self. The stranger often represents your own shadow.' },
+  road:      { emoji: '🛤️', meaning: 'Life\'s journey, a decision point, or uncertainty about the future.' },
+  dark:      { emoji: '🌒', meaning: 'The unconscious, the unknown, or fear of something unseen.' },
+  light:     { emoji: '☀️', meaning: 'Clarity, insight, hope, or a solution becoming visible.' },
+  baby:      { emoji: '🌱', meaning: 'New beginnings, vulnerability, or a new project or idea.' },
+  lost:      { emoji: '🧭', meaning: 'Feeling directionless or overwhelmed by choices in waking life.' },
+  late:      { emoji: '⏳', meaning: 'Pressure about time, deadlines, or fear of missing out.' },
+  ocean:     { emoji: '🌊', meaning: 'The vast unconscious. Depth and mystery, or feeling overwhelmed.' },
+  forest:    { emoji: '🌲', meaning: 'The unknown or a need for solitude and introspection.' },
+};
+
+const EMOTION_KEYWORDS = {
+  anxiety:    ['chase', 'chasing', 'falling', 'late', 'lost', 'teeth', 'trapped', 'fail', 'exam', 'school', 'running', 'scared', 'dark', 'monster'],
+  wonder:     ['flying', 'light', 'ocean', 'colour', 'color', 'vast', 'floating', 'dream', 'strange', 'magical', 'glow', 'forest', 'sky'],
+  sadness:    ['alone', 'lonely', 'crying', 'cry', 'lost', 'death', 'dead', 'gone', 'empty', 'dark', 'forgotten', 'leave', 'miss', 'grief'],
+  conflict:   ['fight', 'argue', 'anger', 'angry', 'yell', 'hit', 'fire', 'war', 'chase', 'danger', 'threat', 'enemy'],
+  curiosity:  ['explore', 'door', 'house', 'room', 'road', 'forest', 'discover', 'strange', 'unknown', 'find', 'map', 'path'],
+  joy:        ['laugh', 'happy', 'friend', 'family', 'play', 'music', 'dance', 'love', 'warm', 'light', 'baby', 'sun'],
+};
+
+const EMOTION_META = {
+  anxiety:  { emoji: '🌀', color: '#a78bfa', primary: 'Anxious' },
+  wonder:   { emoji: '✨', color: '#5eead4', primary: 'Wonder' },
+  sadness:  { emoji: '🌧️', color: '#60a5fa', primary: 'Melancholic' },
+  conflict: { emoji: '🔥', color: '#f87171', primary: 'Conflicted' },
+  curiosity:{ emoji: '🔍', color: '#fbbf24', primary: 'Curious' },
+  joy:      { emoji: '🌟', color: '#34d399', primary: 'Joyful' },
+};
+
+const ACTIONS = {
+  anxiety:  [
+    { icon: '🧘', title: 'Box breathing', desc: '4-4-4-4 inhale/hold/exhale/hold. Grounds the nervous system.' },
+    { icon: '📓', title: 'Morning pages', desc: 'Write three pages of stream-of-consciousness to discharge worry.' },
+    { icon: '🚶', title: 'Walk it out', desc: 'A 20-min walk reduces cortisol and helps process night-time anxiety.' },
+  ],
+  wonder:   [
+    { icon: '🎨', title: 'Sketch the scene', desc: 'Draw what you saw, even roughly. Captures the image before it fades.' },
+    { icon: '📖', title: 'Read myth', desc: 'Dreams of vastness often respond to mythological storytelling.' },
+    { icon: '🌌', title: 'Stargazing', desc: 'Reconnect with the sense of awe the dream evoked.' },
+  ],
+  sadness:  [
+    { icon: '💬', title: 'Name the feeling', desc: 'Speak or write the emotion aloud: "I feel…" Naming reduces its weight.' },
+    { icon: '🤝', title: 'Reach out', desc: 'If the dream involved someone, consider reconnecting with them.' },
+    { icon: '🕯️', title: 'Quiet ritual', desc: 'Light a candle, make tea. Acknowledge what the dream was processing.' },
+  ],
+  conflict: [
+    { icon: '✍️', title: 'Write both sides', desc: 'What would each party in the dream say? Often reveals your own split feelings.' },
+    { icon: '🥊', title: 'Physical release', desc: 'Run, punch a pillow, or do something physically demanding.' },
+    { icon: '🧩', title: 'Identify the real source', desc: 'What waking situation might this conflict represent?' },
+  ],
+  curiosity:[
+    { icon: '🗺️', title: 'Follow the thread', desc: 'Write the dream as a story. Where would you go next?' },
+    { icon: '🔮', title: 'Research a symbol', desc: 'Look up the cultural history of one image that struck you.' },
+    { icon: '📚', title: 'Explore fiction', desc: 'Find a book or film set in a world like your dream.' },
+  ],
+  joy:      [
+    { icon: '🌄', title: 'Savour it', desc: 'Spend 5 minutes visualising the dream\'s best moment. Amplifies positive affect.' },
+    { icon: '💌', title: 'Share it', desc: 'Tell someone about the dream. Joy expands when witnessed.' },
+    { icon: '🌿', title: 'Carry it forward', desc: 'What did the dream suggest was possible? Bring one element into today.' },
+  ],
+};
+
+/* ── Analysis ── */
+let history = JSON.parse(localStorage.getItem('oneira_history') || '[]');
+
+async function analyzeDream() {
+  const text = input.value.trim();
+  if (text.length < 10) {
+    input.style.borderColor = '#f472b6';
+    setTimeout(() => input.style.borderColor = '', 1000);
+    return;
+  }
+
+  document.getElementById('analyzeBtn').disabled = true;
+  document.getElementById('loading').classList.add('visible');
+  document.getElementById('results').classList.remove('visible');
+
+  try {
+    const result = await callClaude(text);
+    renderResults(result, text);
+    saveHistory(text, result);
+  } catch (e) {
+    // Fallback to local NLP
+    const result = localAnalyze(text);
+    renderResults(result, text);
+    saveHistory(text, result);
+  } finally {
+    document.getElementById('loading').classList.remove('visible');
+    document.getElementById('analyzeBtn').disabled = false;
+  }
+}
+
+async function callClaude(dreamText) {
+  const response = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 1000,
+      messages: [{
+        role: 'user',
+        content: `Analyze this dream and respond ONLY with a JSON object (no markdown, no explanation):
+{
+  "primaryEmotion": one of [anxiety, wonder, sadness, conflict, curiosity, joy],
+  "emotions": { "anxiety": 0-100, "wonder": 0-100, "sadness": 0-100, "conflict": 0-100, "curiosity": 0-100, "joy": 0-100 },
+  "symbols": ["up to 4 words found in the dream from this list: flying,falling,water,fire,chasing,teeth,house,school,death,animal,running,stranger,road,dark,light,baby,lost,late,ocean,forest"],
+  "interpretation": "2-3 sentences of thoughtful, non-diagnostic reflection on what this dream might mean for the dreamer's inner world. Empathetic tone. No clinical claims."
+}
+
+Dream: """${dreamText}"""`
+      }]
+    })
+  });
+  const data = await response.json();
+  const raw = data.content.map(b => b.text || '').join('').replace(/```json|```/g, '').trim();
+  return JSON.parse(raw);
+}
+
+function localAnalyze(text) {
+  const lower = text.toLowerCase();
+  const emotions = {};
+  for (const [emotion, keywords] of Object.entries(EMOTION_KEYWORDS)) {
+    let score = 0;
+    keywords.forEach(k => { if (lower.includes(k)) score += 18; });
+    emotions[emotion] = Math.min(score + Math.floor(Math.random() * 12) + 5, 100);
+  }
+  const primaryEmotion = Object.entries(emotions).sort((a, b) => b[1] - a[1])[0][0];
+  const symbols = Object.keys(SYMBOLS).filter(s => lower.includes(s)).slice(0, 4);
+  const interpMap = {
+    anxiety: 'This dream appears to be processing underlying tension — perhaps a situation where you feel uncertain or pressured. Your mind is working through it.',
+    wonder:  'Something expansive is alive in your inner world right now. This dream may be pointing to a hunger for meaning or a part of you that\'s waking up.',
+    sadness: 'The dream seems to be holding grief or loss — something ending or a longing for connection. Allow yourself to feel it rather than rush past.',
+    conflict:'There is unresolved tension the dream is trying to surface. Consider whether there\'s a situation in waking life where you\'re suppressing anger or a difficult feeling.',
+    curiosity:'Your mind is drawn toward exploration and the unknown. This dream may signal that you\'re ready to investigate something you\'ve been circling around.',
+    joy:    'A rare and meaningful dream. Something in your psyche is flourishing. Notice what caused the good feeling and carry that quality into your day.',
+  };
+  return { primaryEmotion, emotions, symbols, interpretation: interpMap[primaryEmotion] };
+}
+
+function renderResults(result, text) {
+  const { primaryEmotion, emotions, symbols, interpretation } = result;
+  const meta = EMOTION_META[primaryEmotion] || EMOTION_META.wonder;
+
+  document.getElementById('primaryEmotion').textContent = meta.primary;
+  document.getElementById('emotionEmoji').textContent = meta.emoji;
+
+  // Bars
+  const barsEl = document.getElementById('emotionBars');
+  barsEl.innerHTML = '';
+  const sorted = Object.entries(emotions).sort((a, b) => b[1] - a[1]).slice(0, 5);
+  const colors = { anxiety:'#a78bfa', wonder:'#5eead4', sadness:'#60a5fa', conflict:'#f87171', curiosity:'#fbbf24', joy:'#34d399' };
+  sorted.forEach(([e, v]) => {
+    const row = document.createElement('div');
+    row.className = 'bar-row';
+    row.innerHTML = `<span class="bar-label">${e.charAt(0).toUpperCase() + e.slice(1)}</span>
+      <div class="bar-track"><div class="bar-fill" style="background:${colors[e]||'#a78bfa'}" data-val="${v}"></div></div>
+      <span class="bar-val">${v}%</span>`;
+    barsEl.appendChild(row);
+  });
+  requestAnimationFrame(() => {
+    document.querySelectorAll('.bar-fill').forEach(el => {
+      el.style.width = el.dataset.val + '%';
+    });
+  });
+
+  // Symbols
+  const grid = document.getElementById('symbolsGrid');
+  grid.innerHTML = '';
+  const foundSymbols = symbols.filter(s => SYMBOLS[s]);
+  if (foundSymbols.length === 0) {
+    grid.innerHTML = '<p style="color:var(--mist);font-size:0.82rem">No specific symbols detected — the emotional tone analysis above may be more useful for this dream.</p>';
+  } else {
+    foundSymbols.forEach(s => {
+      const sym = SYMBOLS[s];
+      const chip = document.createElement('div');
+      chip.className = 'symbol-chip';
+      chip.innerHTML = `<div class="symbol-name">${sym.emoji} ${s.charAt(0).toUpperCase() + s.slice(1)}</div>
+        <div class="symbol-meaning">${sym.meaning}</div>`;
+      grid.appendChild(chip);
+    });
+  }
+
+  // Interpretation
+  document.getElementById('interpretation').textContent = interpretation;
+
+  // Actions
+  const actions = ACTIONS[primaryEmotion] || ACTIONS.curiosity;
+  const actionsEl = document.getElementById('actionsRow');
+  actionsEl.innerHTML = '';
+  actions.forEach(a => {
+    const chip = document.createElement('div');
+    chip.className = 'action-chip';
+    chip.innerHTML = `<div class="action-icon">${a.icon}</div>
+      <div><div class="action-title">${a.title}</div>
+      <div class="action-desc">${a.desc}</div></div>`;
+    actionsEl.appendChild(chip);
+  });
+
+  document.getElementById('results').classList.add('visible');
+  document.getElementById('results').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function saveHistory(text, result) {
+  const entry = {
+    id: Date.now(),
+    snippet: text.slice(0, 80),
+    emotion: result.primaryEmotion,
+    date: new Date().toLocaleDateString('en-GB', { day:'numeric', month:'short' }),
+  };
+  history.unshift(entry);
+  if (history.length > 10) history.pop();
+  localStorage.setItem('oneira_history', JSON.stringify(history));
+  renderHistory();
+}
+
+function renderHistory() {
+  if (history.length === 0) return;
+  const section = document.getElementById('historySection');
+  const list = document.getElementById('historyList');
+  section.style.display = 'block';
+  list.innerHTML = '';
+  const colors = { anxiety:'#a78bfa', wonder:'#5eead4', sadness:'#60a5fa', conflict:'#f87171', curiosity:'#fbbf24', joy:'#34d399' };
+  history.slice(0, 5).forEach(entry => {
+    const item = document.createElement('div');
+    item.className = 'history-item';
+    item.innerHTML = `<span class="history-snippet">${entry.snippet}…</span>
+      <div class="history-meta">
+        <span class="history-badge" style="color:${colors[entry.emotion]||'#a78bfa'};border-color:${colors[entry.emotion]||'#a78bfa'}20">${entry.emotion}</span>
+        <span>${entry.date}</span>
+      </div>`;
+    list.appendChild(item);
+  });
+}
+
+renderHistory();
+</script>
+</body>
+</html>
