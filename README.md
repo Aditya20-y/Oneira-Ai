@@ -41,3 +41,13 @@ To unlock the primary AI layer, you will need an **Anthropic API Key**. *(Note: 
 1. **Clone this repository:**
    ```bash
    git clone [https://github.com/Aditya20-y/Oneira-Ai.git](https://github.com/Aditya20-y/Oneira-Ai.git)
+graph TD;
+    A[User Input: Dream Narrative] --> B(analyze function);
+    B --> C{API Available?};
+    C -- Yes --> D[Primary API Layer: Claude AI Server];
+    C -- No --> E[Fallback Layer: Local NLP Keyword Matching];
+    D --> F[Render Engine];
+    E --> F;
+    F --> G[Emotion Charts];
+    F --> H[Symbol Graph];
+    F --> I[Action Prompts];
